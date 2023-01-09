@@ -72,10 +72,18 @@ namespace ZBand_EZTV
         public void InitializeCommsManager()
         {
             serverAddressPath = _serverIP + apiRootPath;
-            CrestronConsole.PrintLine($"ServerAddressPath: {serverAddressPath}");
-            CrestronConsole.PrintLine($"U/P: {_username}:{_password}");
+
+            if (Debug.ZBandDebugEnabled)
+            {
+                CrestronConsole.PrintLine($"ServerAddressPath: {serverAddressPath}");
+                CrestronConsole.PrintLine($"U/P: {_username}:{_password}");
+            }
+
             LoginRequest();
 
+            //GetAllEndpointswithLimits();
+            //GetAllEnabledChannels();
+            //GetEPGFull();
         }
 
 
@@ -185,16 +193,14 @@ namespace ZBand_EZTV
                 //test status code for success
                 if (rsp.statusCode == HttpStatusCode.Unauthorized)
                 {
-                    CrestronConsole.PrintLine($"Token Expired.");
+                    if (Debug.ZBandDebugEnabled) CrestronConsole.PrintLine($"Token Expired.");
                     isLoggedIn = false;
                 }
                 else if (rsp.statusCode == HttpStatusCode.OK)
                 {
-                    CrestronConsole.PrintLine($"Token Verified.");
+                    if (Debug.ZBandDebugEnabled) CrestronConsole.PrintLine($"Token Verified.");
                     isLoggedIn = true;
                 }
-
-
             }
             catch (Exception e)
             {
@@ -369,7 +375,7 @@ namespace ZBand_EZTV
 
             //set other request params
             string offset = "offset=0";
-            string limit = "limit=20";
+            string limit = "limit=100";
             string targetuseragent = "targetuseragent=PC_Mac";
 
             //create an api path with the time frame included

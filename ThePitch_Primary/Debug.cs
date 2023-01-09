@@ -8,7 +8,7 @@ namespace TSI.DebugUtilities
 {
     public static class Debug
     {
-        public static bool SystemDebugEnabled = true;
+        public static bool SystemDebugEnabled = false;
         public static bool ErrorLogEnabled = true;
         public static bool ZBandDebugEnabled = false;
     }
