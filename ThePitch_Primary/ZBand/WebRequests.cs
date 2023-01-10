@@ -105,8 +105,6 @@ namespace TSI.WebRequestUtilities
             newStream.Write(reqByte, 0, reqByte.Length);
             newStream.Close();
 
-
-
             //allows for validation of SSL certificates 
             ServicePointManager.ServerCertificateValidationCallback += new System.Net.Security.RemoteCertificateValidationCallback(ValidateServerCertificate);
 
@@ -131,11 +129,12 @@ namespace TSI.WebRequestUtilities
 
 
 
+        
         public static bool ValidateServerCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
         {
             return true;
         }
-
+        
     }
 
     public class HttpResponseObject

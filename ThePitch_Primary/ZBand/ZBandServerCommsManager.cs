@@ -1,15 +1,12 @@
 ﻿using System;
 using Crestron.SimplSharp;
-using System.Collections.Generic;
-using System.Text;
-using System.IO;
 using System.Net.Security;
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
 using Newtonsoft.Json;
 using TSI.WebRequestUtilities;
 using TSI.DebugUtilities;
-using ThePitch_Primary;
+
 
 
 namespace ZBand_EZTV
@@ -27,9 +24,7 @@ namespace ZBand_EZTV
 
         //an object that will hold channel info
         public ChannelJsonObject ChannelLineUp;
-
         public EndpointJsonObject EndpointList;
-
         public EpgAllJsonObject EPGLineUp;
 
         //eventhandlers
@@ -80,10 +75,6 @@ namespace ZBand_EZTV
             }
 
             LoginRequest();
-
-            //GetAllEndpointswithLimits();
-            //GetAllEnabledChannels();
-            //GetEPGFull();
         }
 
 
@@ -142,13 +133,6 @@ namespace ZBand_EZTV
             }
         }
 
-        //not super safe, but this app is purpose built and will only ever connect to a single server that is ostensibly secure
-        public static bool ValidateServerCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
-        {
-            return true;
-        }
-
-
         public void RenewToken()
         {
             try
@@ -162,7 +146,7 @@ namespace ZBand_EZTV
                 //test status code for success
                 if (rsp.statusCode != HttpStatusCode.OK)
                 {
-                    CrestronConsole.PrintLine($"Renew Unsucessful.");
+                    if (Debug.ZBandDebugEnabled) CrestronConsole.PrintLine($"Renew Unsucessful.");
                     isLoggedIn = false;
                 }
                 else
@@ -170,7 +154,7 @@ namespace ZBand_EZTV
                     LoginJsonObject loginRsp = JsonConvert.DeserializeObject<LoginJsonObject>(rsp.responseBody);
                     apiToken = loginRsp.token;
 
-                    CrestronConsole.PrintLine($"Renewal Sucess. Token Received");
+                    if (Debug.ZBandDebugEnabled) CrestronConsole.PrintLine($"Renewal Sucess. Token Received");
                     isLoggedIn = true;
                 }
 

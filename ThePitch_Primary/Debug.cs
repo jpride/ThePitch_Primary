@@ -10,6 +10,6 @@ namespace TSI.DebugUtilities
     {
         public static bool SystemDebugEnabled = false;
         public static bool ErrorLogEnabled = true;
-        public static bool ZBandDebugEnabled = false;
+        public static bool ZBandDebugEnabled = true;
     }
 }

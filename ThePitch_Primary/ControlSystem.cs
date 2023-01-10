@@ -7,6 +7,7 @@ using ZBand_EZTV;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 using TSI.DebugUtilities;
+using Crestron.SimplSharpPro.CrestronConnected;
 
 namespace ThePitch_Primary //CHANGE EISCS BEFORE DEPLOYMENT
 {
@@ -30,6 +31,8 @@ namespace ThePitch_Primary //CHANGE EISCS BEFORE DEPLOYMENT
             GetChannels = 3,
             GetEPG = 4,          
         }
+
+        private uint currentProgramOnEndpointStartIndex = 101;
 
 
         //Zband Server Class Init and field setting
@@ -112,19 +115,55 @@ namespace ThePitch_Primary //CHANGE EISCS BEFORE DEPLOYMENT
                             "GetEPG",
                             "Requests List of Current Shows for Enabled Channels from Zband Server",
                             ConsoleAccessLevelEnum.AccessOperator);
+
+                        CrestronConsole.AddNewConsoleCommand(
+                            SetSystemDebugging,
+                            "SetSystemDebugging",
+                            "Sets System Debug variable to on/off so System Debug messages are active.",
+                            ConsoleAccessLevelEnum.AccessOperator);
+
+                        CrestronConsole.AddNewConsoleCommand(
+                            SetZBandDebugging,
+                            "SetZBandDebugging",
+                            "Sets ZBand Debug variable to on/off so System Debug messages are active.",
+                            ConsoleAccessLevelEnum.AccessOperator);
                     });
 
                 programThread.Start();
 
                 //Get Server data at startup
-                commMgr.GetAllEndpointswithLimits();
-                commMgr.GetAllEnabledChannels();
-                commMgr.GetEPGFull();
+                GetEndpoints(null);
+                GetChannels(null);
+                GetEPG(null);
                 
             }
             catch (Exception e)
             {
                 ErrorLog.Error("Error in InitializeSystem: {0}", e.Message);
+            }
+        }
+
+        private void SetSystemDebugging(string cmdParameters)
+        {
+            if (cmdParameters.ToLower() == "on")
+            {
+                Debug.SystemDebugEnabled = true;
+            }
+            else
+            {
+                Debug.SystemDebugEnabled = false;
+            }
+        }
+
+        private void SetZBandDebugging(string cmdParameters)
+        {
+            if (cmdParameters.ToLower() == "on")
+            {
+                Debug.ZBandDebugEnabled = true;
+            }
+            else
+            {
+                Debug.ZBandDebugEnabled = false;
             }
         }
 
@@ -164,7 +203,7 @@ namespace ThePitch_Primary //CHANGE EISCS BEFORE DEPLOYMENT
             uint i = 1;
             foreach (var item in commMgr.EndpointList.items)
             {
-                if (Debug.SystemDebugEnabled)
+                if (Debug.ZBandDebugEnabled)
                 {
                     CrestronConsole.PrintLine($"Endpoint: {item.name}");
                     CrestronConsole.PrintLine($"Endpoint Now Playing: {item.playingChannel1Number} | {item.playingChannel1Name}");
@@ -174,7 +213,7 @@ namespace ThePitch_Primary //CHANGE EISCS BEFORE DEPLOYMENT
                 endpointEisc.SetSerial(i + 1, item.playingChannel1Name);
                 endpointEisc.SetSerial(i + 2, item.playingChannel1Number);
 
-                i+=4;
+                i+=3;
             }
         }
 
@@ -190,7 +229,7 @@ namespace ThePitch_Primary //CHANGE EISCS BEFORE DEPLOYMENT
             uint i = 1;
             foreach (var item in commMgr.ChannelLineUp.items)
             {
-                if (Debug.SystemDebugEnabled) CrestronConsole.PrintLine($"Channel: {item.name}");
+                if (Debug.ZBandDebugEnabled) CrestronConsole.PrintLine($"Channel: {item.name}");
                 channelEisc.SetSerial(i, item.name);
                 i++;
             }
@@ -205,7 +244,7 @@ namespace ThePitch_Primary //CHANGE EISCS BEFORE DEPLOYMENT
                 uint i = 1;
                 foreach (var item in commMgr.EPGLineUp.items)
                 {
-                    if (Debug.SystemDebugEnabled)
+                    if (Debug.ZBandDebugEnabled)
                     {
                         CrestronConsole.PrintLine($"Channel: {item.name}");
                         CrestronConsole.PrintLine($"Program Name: {item.programs[0].name}");
@@ -217,8 +256,10 @@ namespace ThePitch_Primary //CHANGE EISCS BEFORE DEPLOYMENT
                     epgEisc.SetSerial(i + 1, item.programs[0].episodeDescription);
 
                     i += 2;
-
                 }
+
+                //attempt to put a name to the current program showing on each endpoint and send it to EISC
+                GetCurrentlyPlayingOnEndpoints();
             }
             catch (Exception e)
             {
@@ -226,6 +267,43 @@ namespace ThePitch_Primary //CHANGE EISCS BEFORE DEPLOYMENT
                 CrestronConsole.PrintLine($"Exception: {e.Message}");
             }
 
+        }
+
+        public void GetCurrentlyPlayingOnEndpoints()
+        {
+            //testing this code block
+            uint i = currentProgramOnEndpointStartIndex;
+            foreach (var item in commMgr.EndpointList.items)
+            {
+                try
+                {
+                    //find the channel index for the endpoints currently playing number
+                    //Convert Endpoint playingChannel1Number to int
+                    bool convertChanSuccess = Int32.TryParse(item.playingChannel1Number, out int searchNum);
+
+                    //if the value is sucessfully converted to int, find the index of the channel with that 'number'
+                    if (convertChanSuccess)
+                    {
+                        //get index in channel list of channel with number == searchNum
+                        var chanIndex = commMgr.ChannelLineUp.items.FindIndex(a => a.number.Equals(searchNum));
+
+                        //output to debug if necessary
+                        if (Debug.ZBandDebugEnabled) CrestronConsole.PrintLine($"chanIndex: {chanIndex}");
+
+                        //if the chanIndex is not -1, its been found in the list, set serial to that program's name to keep track of current program on each endpoint
+                        if (chanIndex != -1)
+                        {   //send to EISC
+                            endpointEisc.SetSerial(i, commMgr.EPGLineUp.items[chanIndex].programs[0].name);
+                        }
+                    }
+                }
+                catch (Exception e)
+                {
+                    CrestronConsole.PrintLine($"Error in GetEPG of ControlSystem.cs: {e.Message}");
+                }
+
+                i++;
+            }
         }
 
 
