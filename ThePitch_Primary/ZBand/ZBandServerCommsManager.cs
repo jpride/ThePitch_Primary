@@ -1,8 +1,6 @@
 ﻿using System;
 using Crestron.SimplSharp;
-using System.Net.Security;
 using System.Net;
-using System.Security.Cryptography.X509Certificates;
 using Newtonsoft.Json;
 using TSI.WebRequestUtilities;
 using TSI.DebugUtilities;
@@ -11,7 +9,7 @@ using TSI.DebugUtilities;
 
 namespace ZBand_EZTV
 {
-    public class ZBandServerCommsManager
+    public class ZBandServerCommsManager : IZBandServerCommsManager
     {
         //class-wide vars and classes 
 
@@ -26,6 +24,7 @@ namespace ZBand_EZTV
         public ChannelJsonObject ChannelLineUp;
         public EndpointJsonObject EndpointList;
         public EpgAllJsonObject EPGLineUp;
+        public GroupJsonObject GroupList;
 
         //eventhandlers
         public event EventHandler<LoginEventArgs> LoginEvent;
@@ -70,8 +69,8 @@ namespace ZBand_EZTV
 
             if (Debug.ZBandDebugEnabled)
             {
-                CrestronConsole.PrintLine($"ServerAddressPath: {serverAddressPath}");
-                CrestronConsole.PrintLine($"U/P: {_username}:{_password}");
+                ErrorLog.Notice($"ServerAddressPath: {serverAddressPath}");
+                ErrorLog.Notice($"U/P: {_username}:{_password}");
             }
 
             LoginRequest();
@@ -85,27 +84,30 @@ namespace ZBand_EZTV
             {
                 string apiPath = "login";
 
+                //create requestBody for Login reqest
                 LoginRequestBody requestBodyObject = new LoginRequestBody
                 {
                     username = _username,
                     password = _password
                 };
 
+                //serialize requestBody
                 string requestBody = JsonConvert.SerializeObject(requestBodyObject);
-                
-                if (Debug.SystemDebugEnabled) CrestronConsole.PrintLine($"Login Request Body: {requestBody}");
 
+                if (Debug.SystemDebugEnabled) ErrorLog.Notice($"Login Request Body: {requestBody}");
 
+                //create request
                 HttpResponseObject rsp = new HttpResponseObject();
                 rsp = wr.CreateWebRequestWithRequestBodyOnly(apiPath, "POST", requestBody);
 
                 //create login event args
                 LoginEventArgs args = new LoginEventArgs();
 
+
                 if (rsp.statusCode != HttpStatusCode.OK)
                 {
-                    CrestronConsole.PrintLine($"Login Unsucessful.");
-                    ErrorLog.Error($"Login Unusccessful!");
+                    if (Debug.ZBandDebugEnabled) ErrorLog.Error($"Login Unsuccessful!");
+                    if (Debug.ErrorLogEnabled) ErrorLog.Error($"Login Unusccessful!");
                     isLoggedIn = false;
                 }
                 else
@@ -115,10 +117,9 @@ namespace ZBand_EZTV
 
                     if (Debug.SystemDebugEnabled)
                     {
-                        CrestronConsole.PrintLine($"Login Success. Token Received.");
+                        ErrorLog.Notice($"Login Success. Token Received.");
                     }
 
-                    ErrorLog.Error($"Login Success. Token Received");
                     isLoggedIn = true;
                 }
 
@@ -128,7 +129,6 @@ namespace ZBand_EZTV
             }
             catch (Exception e)
             {
-                CrestronConsole.PrintLine($"Exception in LoginRequest: {e.Message}");
                 ErrorLog.Error($"Exception in LoginRequest: {e.Message}");
             }
         }
@@ -146,7 +146,7 @@ namespace ZBand_EZTV
                 //test status code for success
                 if (rsp.statusCode != HttpStatusCode.OK)
                 {
-                    if (Debug.ZBandDebugEnabled) CrestronConsole.PrintLine($"Renew Unsucessful.");
+                    if (Debug.ZBandDebugEnabled) ErrorLog.Error($"Renew Unsucessful.");
                     isLoggedIn = false;
                 }
                 else
@@ -154,7 +154,7 @@ namespace ZBand_EZTV
                     LoginJsonObject loginRsp = JsonConvert.DeserializeObject<LoginJsonObject>(rsp.responseBody);
                     apiToken = loginRsp.token;
 
-                    if (Debug.ZBandDebugEnabled) CrestronConsole.PrintLine($"Renewal Sucess. Token Received");
+                    if (Debug.ZBandDebugEnabled) ErrorLog.Notice($"Successfully Renewed Token.");
                     isLoggedIn = true;
                 }
 
@@ -163,7 +163,7 @@ namespace ZBand_EZTV
             }
             catch (Exception e)
             {
-                CrestronConsole.PrintLine($"Exception in RenewToken: {e.Message}");
+                ErrorLog.Error($"Exception in RenewToken: {e.Message}");
             }
         }
 
@@ -174,21 +174,27 @@ namespace ZBand_EZTV
                 HttpResponseObject rsp = new HttpResponseObject();
                 rsp = wr.CreateWebRequestWithApiToken("verify", "GET");
 
+                //create login event args
+                LoginEventArgs args = new LoginEventArgs();
+
                 //test status code for success
                 if (rsp.statusCode == HttpStatusCode.Unauthorized)
                 {
-                    if (Debug.ZBandDebugEnabled) CrestronConsole.PrintLine($"Token Expired.");
+                    if (Debug.ZBandDebugEnabled) ErrorLog.Error($"Token Expired.");
                     isLoggedIn = false;
                 }
                 else if (rsp.statusCode == HttpStatusCode.OK)
                 {
-                    if (Debug.ZBandDebugEnabled) CrestronConsole.PrintLine($"Token Verified.");
+                    if (Debug.ZBandDebugEnabled) ErrorLog.Notice($"Token Verified.");
                     isLoggedIn = true;
                 }
+
+                args.isLoggedIn = isLoggedIn;
+                LoginEvent?.Invoke(this, args);
             }
             catch (Exception e)
             {
-                CrestronConsole.PrintLine($"Exception in VerifyToken: {e.Message}");
+                ErrorLog.Error($"Exception in VerifyToken: {e.Message}");
             }
 
             return isLoggedIn;
@@ -233,8 +239,8 @@ namespace ZBand_EZTV
                 //test status code for success
                 if (rsp.statusCode != HttpStatusCode.OK)
                 {
-                    CrestronConsole.PrintLine($"ZBandServerCommsManager:GetAllEndpointswithLimits Request Failed");
-                    ErrorLog.Error($"ZBandServerCommsManager:GetAllEndpointswithLimits Request Failed with code: {rsp.statusCode}");
+                    if (Debug.ZBandDebugEnabled) ErrorLog.Error($"ZBandServerCommsManager:GetAllEndpointswithLimits Request Failed");
+                    if (Debug.SystemDebugEnabled) ErrorLog.Error($"ZBandServerCommsManager:GetAllEndpointswithLimits Request Failed with code: {rsp.statusCode}");
                     return;
                 }
                 else
@@ -246,7 +252,7 @@ namespace ZBand_EZTV
             }
             catch (Exception e)
             {
-                CrestronConsole.PrintLine($"Exception in ZBandServerCommsManager:GetAllEndpointswithLimits: {e.Message}");
+                ErrorLog.Error($"Exception in ZBandServerCommsManager:GetAllEndpointswithLimits: {e.Message}");
                 ErrorLog.Error($"Exception in ZBandServerCommsManager:GetAllEndpointswithLimits: {e.Message}");
             }
         }
@@ -272,25 +278,27 @@ namespace ZBand_EZTV
                 //test status code for success
                 if (rsp.statusCode != HttpStatusCode.Created)
                 {
-                    CrestronConsole.PrintLine($"Set Channel Request Failed with Status Code: {rsp.statusCode}");
+                    ErrorLog.Error($"Set Channel Request Failed with Status Code: {rsp.statusCode}");
                     if (Debug.ErrorLogEnabled) ErrorLog.Warn($"Set Channel Request Failed. Status Code: {rsp.statusCode}");
+                    PreAuthorize();
                     return;
                 }
                 else
                 {
                     if (Debug.ZBandDebugEnabled)
                     {
-                        CrestronConsole.PrintLine($"Successfully sent Set Channel request. Response: {rsp.responseBody}");
-                        if (Debug.ErrorLogEnabled) ErrorLog.Warn($"Successfully sent Set Channel request. Repsonse: {rsp.responseBody}");
+                        ErrorLog.Notice($"Successfully sent Set Channel request. Response: {rsp.responseBody}");
+                        if (Debug.ErrorLogEnabled) ErrorLog.Notice($"Successfully sent Set Channel request. Repsonse: {rsp.responseBody}");
                     }
                 }
             }
             catch (Exception e)
             {
-                CrestronConsole.PrintLine($"Exception in SetChannel: {e.Message}");
+                ErrorLog.Error($"Exception in SetChannel: {e.Message}");
                 if (Debug.ErrorLogEnabled) ErrorLog.Error($"Exception in SetChannel: {e.Message}");
             }
         }
+
 
 
         //**************************************************    Channel Operations      ***************************************************//
@@ -321,8 +329,8 @@ namespace ZBand_EZTV
                 //check status code
                 if (rsp.statusCode != HttpStatusCode.OK)
                 {
-                    if (Debug.ZBandDebugEnabled) CrestronConsole.PrintLine($"GetAllEnabledChannel Request Failed");
-                    
+                    if (Debug.ZBandDebugEnabled) ErrorLog.Error($"GetAllEnabledChannel Request Failed");
+
                     if (Debug.ErrorLogEnabled) ErrorLog.Error($"ZBandServerCommsManager:GetAllEnabledChannel Request Failed with code: {rsp.statusCode}");
                     return;
                 }
@@ -334,14 +342,15 @@ namespace ZBand_EZTV
             }
             catch (Exception e)
             {
-                CrestronConsole.PrintLine($"Exception in ZBandServerCommsManager:GetAllEnabledChannels: {e.Message}");
+                ErrorLog.Error($"Exception in ZBandServerCommsManager:GetAllEnabledChannels: {e.Message}");
                 if (Debug.ErrorLogEnabled) ErrorLog.Error($"Exception in ZBandServerCommsManager:GetAllEnabledChannels: {e.Message}");
             }
 
         }
 
 
-        //**************************************************    EPG Operations      ***************************************************//
+
+        //**************************************************    EPG Operations      *******************************************************//
         /// <summary>
         /// Requests EPG Data for all "allowed" channels for now to 15 min from now. 
         /// </summary>
@@ -361,9 +370,10 @@ namespace ZBand_EZTV
             string offset = "offset=0";
             string limit = "limit=100";
             string targetuseragent = "targetuseragent=PC_Mac";
+            string sort = "sort=id"; //sort EPG data by Channel to keep the list in an order we expect
 
             //create an api path with the time frame included
-            string apiPath = "epg/?" + offset + "&" + limit + "&from=" + nowString + "&to=" + fifteenMinFromNowString + "&" + targetuseragent;
+            string apiPath = "epg?" + offset + "&" + limit + "&from=" + nowString + "&to=" + fifteenMinFromNowString + "&" + targetuseragent + "&" + sort;
 
 
             try
@@ -375,7 +385,7 @@ namespace ZBand_EZTV
                 //check status code
                 if (rsp.statusCode != HttpStatusCode.OK)
                 {
-                    if (Debug.ZBandDebugEnabled)CrestronConsole.PrintLine($"GetEPGFull Request Failed");
+                    if (Debug.ZBandDebugEnabled) ErrorLog.Error($"GetEPGFull Request Failed");
                     if (Debug.ErrorLogEnabled) ErrorLog.Error($"ZBandServerCommsManager:GetEPGFull Request Failed with code:  {rsp.statusCode}");
                     return;
                 }
@@ -383,19 +393,66 @@ namespace ZBand_EZTV
                 {
                     if (Debug.ZBandDebugEnabled)
                     {
-                        CrestronConsole.PrintLine($"GetEPGFull Request Success");
+                        ErrorLog.Notice($"GetEPGFull Request Success");
+                        //ErrorLog.Notice($"EPG Data: {rsp.responseBody}"); //uncomment this only for debugging purposes. In production, this will be a super large chunk of data
                     }
 
                     //place data in container for later parsing
                     EPGLineUp = JsonConvert.DeserializeObject<EpgAllJsonObject>(rsp.responseBody);
+                    
                 }
             }
             catch (Exception ex)
             {
-                CrestronConsole.PrintLine($"Exception in ZBandServerCommsManager:GetEPGFull: {ex.Message}");
+                ErrorLog.Error($"Exception in ZBandServerCommsManager:GetEPGFull: {ex.Message}");
                 if (Debug.ErrorLogEnabled) ErrorLog.Error($"Exception in ZBandServerCommsManager:GetEPGFull: {ex.Message}");
             }
 
+        }
+
+
+
+        //**************************************************    Groups Operations      *******************************************************//
+        /// <summary>
+        /// Requests List of Groups on the server
+        /// </summary>
+        public void GetAllGroups()
+        {
+            //check token and take appropriate action
+            PreAuthorize();
+
+            //build out params of request
+            string offset = "offset=0";
+            string limit = "limit=20";
+
+            //construct apiPath with Params
+            string apiPath = "groups?" + offset + "&" + limit;
+
+            try
+            {
+                //create request 
+                HttpResponseObject rsp = new HttpResponseObject();
+                rsp = wr.CreateWebRequestWithApiToken(apiPath, "GET");
+
+                //check status code
+                if (rsp.statusCode != HttpStatusCode.OK)
+                {
+                    if (Debug.ZBandDebugEnabled) ErrorLog.Error($"GetAllGroups Request Failed");
+
+                    if (Debug.ErrorLogEnabled) ErrorLog.Error($"ZBandServerCommsManager:GetAllGroups Request Failed with code: {rsp.statusCode}");
+                    return;
+                }
+                else
+                {
+                    //place data in a container for later parsing
+                    GroupList = JsonConvert.DeserializeObject<GroupJsonObject>(rsp.responseBody);
+                }
+            }
+            catch (Exception e)
+            {
+                CrestronConsole.PrintLine($"Exception in ZBandServerCommsManager:GetAllGroups: {e.Message}");
+                if (Debug.ErrorLogEnabled) ErrorLog.Error($"Exception in ZBandServerCommsManager:GetAllGroups: {e.Message}");
+            }
         }
 
     }

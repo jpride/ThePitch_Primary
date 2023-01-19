@@ -1,19 +1,13 @@
-﻿using Crestron.SimplSharp;
-using Newtonsoft.Json;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
+﻿using System.IO;
 using System.Net;
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using System.Threading.Tasks;
 using ZBand_EZTV;
 
 namespace TSI.WebRequestUtilities
 {
-    public class WebRequests
+    public class WebRequests : IWebRequests
     {
         public HttpResponseObject CreateWebRequestWithApiToken(string apiPath, string requestMethod)
         {
@@ -38,13 +32,13 @@ namespace TSI.WebRequestUtilities
                 responseBody = responseFromServer,
                 statusCode = response.StatusCode
             };
-            
+
             reader.Close();
             dataStream.Close();
             response.Close();
 
             return rsp;
-            
+
         }
 
         public HttpResponseObject CreateWebRequestWithApiTokenandRequestBody(string apiPath, string requestMethod, string requestBody)
@@ -128,13 +122,11 @@ namespace TSI.WebRequestUtilities
         }
 
 
-
-        
         public static bool ValidateServerCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
         {
             return true;
         }
-        
+
     }
 
     public class HttpResponseObject

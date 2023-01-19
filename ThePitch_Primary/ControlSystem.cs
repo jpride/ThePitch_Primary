@@ -7,10 +7,11 @@ using ZBand_EZTV;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 using TSI.DebugUtilities;
-using Crestron.SimplSharpPro.CrestronConnected;
 
-namespace ThePitch_Primary //CHANGE EISCS BEFORE DEPLOYMENT
+
+namespace ThePitch_Primary 
 {
+    //CHANGE EISCS BEFORE DEPLOYMENT
     public class ControlSystem : CrestronControlSystem
     {
         //var to keep track of when EISCs are online and data is ready for manipulating
@@ -29,12 +30,16 @@ namespace ThePitch_Primary //CHANGE EISCS BEFORE DEPLOYMENT
             SystemReadyForRouting = 1,
             GetEndpoints = 2,
             GetChannels = 3,
-            GetEPG = 4,          
+            GetEPG = 4,
+            SetSystemDebugging = 5,
+            SetZBandDebugging = 6,
         }
 
-        private uint currentProgramOnEndpointStartIndex = 101;
+        private uint endpointNowPlayingNameJoinOffset = 30;
+        private uint endpointNowPlayingNumberJoinOffset = 60;
+        private uint endpointNowPlayingProgramName = 100;
 
-
+        
         //Zband Server Class Init and field setting
         ZBandServerCommsManager commMgr;
 
@@ -45,8 +50,7 @@ namespace ThePitch_Primary //CHANGE EISCS BEFORE DEPLOYMENT
         
 
         //********************************      Control System and Init         ******************************//
-        public ControlSystem()
-            : base()
+        public ControlSystem()  : base()
         {
             try
             {
@@ -65,7 +69,9 @@ namespace ThePitch_Primary //CHANGE EISCS BEFORE DEPLOYMENT
                 epgEisc._eiscEvent += Eisc_event;
                 digitalEisc._eiscEvent += Eisc_event;
 
-               
+                
+
+
                 //instantiate ZBandServerCommsManager class
                 commMgr = new ZBandServerCommsManager();
 
@@ -153,6 +159,9 @@ namespace ThePitch_Primary //CHANGE EISCS BEFORE DEPLOYMENT
             {
                 Debug.SystemDebugEnabled = false;
             }
+
+            string state = Debug.SystemDebugEnabled ? "on" : "off";
+            ErrorLog.Notice($"System Debugging is now: {state}");
         }
 
         private void SetZBandDebugging(string cmdParameters)
@@ -165,9 +174,12 @@ namespace ThePitch_Primary //CHANGE EISCS BEFORE DEPLOYMENT
             {
                 Debug.ZBandDebugEnabled = false;
             }
+
+            string state = Debug.ZBandDebugEnabled ? "on" : "off";
+            ErrorLog.Notice($"Zband Debugging is now: {state}");
         }
 
-        //method to set digital EISC for LoggedIn status
+        //method to update digital EISC with LoggedIn status
         private void CommMgr_LoginEvent(object sender, LoginEventArgs e)
         {
             digitalEisc.SetDigital(1, e.isLoggedIn);
@@ -205,15 +217,15 @@ namespace ThePitch_Primary //CHANGE EISCS BEFORE DEPLOYMENT
             {
                 if (Debug.ZBandDebugEnabled)
                 {
-                    CrestronConsole.PrintLine($"Endpoint: {item.name}");
-                    CrestronConsole.PrintLine($"Endpoint Now Playing: {item.playingChannel1Number} | {item.playingChannel1Name}");
+                    ErrorLog.Notice($"Endpoint: {item.name}");
+                    ErrorLog.Notice($"Endpoint Now Playing: {item.playingChannel1Number} | {item.playingChannel1Name}");
                 }
 
                 endpointEisc.SetSerial(i, item.name);
-                endpointEisc.SetSerial(i + 1, item.playingChannel1Name);
-                endpointEisc.SetSerial(i + 2, item.playingChannel1Number);
+                endpointEisc.SetSerial(i + endpointNowPlayingNameJoinOffset, item.playingChannel1Name);
+                endpointEisc.SetSerial(i + endpointNowPlayingNumberJoinOffset, item.playingChannel1Number);
 
-                i+=3;
+                i++;
             }
         }
 
@@ -229,7 +241,7 @@ namespace ThePitch_Primary //CHANGE EISCS BEFORE DEPLOYMENT
             uint i = 1;
             foreach (var item in commMgr.ChannelLineUp.items)
             {
-                if (Debug.ZBandDebugEnabled) CrestronConsole.PrintLine($"Channel: {item.name}");
+                if (Debug.ZBandDebugEnabled) ErrorLog.Notice($"Channel: {item.name}");
                 channelEisc.SetSerial(i, item.name);
                 i++;
             }
@@ -241,17 +253,22 @@ namespace ThePitch_Primary //CHANGE EISCS BEFORE DEPLOYMENT
 
             try
             {
-                uint i = 1;
+                uint i = 1; //need to look at this. needs to be channel number based indexing
                 foreach (var item in commMgr.EPGLineUp.items)
                 {
                     if (Debug.ZBandDebugEnabled)
                     {
-                        CrestronConsole.PrintLine($"Channel: {item.name}");
-                        CrestronConsole.PrintLine($"Program Name: {item.programs[0].name}");
-                        CrestronConsole.PrintLine($"Program Episode: {item.programs[0].episodeDescription}");
+                        ErrorLog.Notice($"*** EPG Data ***");
+                        ErrorLog.Notice($"Channel: {item.name}");
+                        ErrorLog.Notice($"Channel ID: {item.id}");
+                        ErrorLog.Notice($"Channel number: {item.number}");
+                        ErrorLog.Notice($"Program Name: {item.programs[0].name}");
+                        ErrorLog.Notice($"Program Episode: {item.programs[0].episodeDescription}");
+                        ErrorLog.Notice($"\n");
                     }
 
                     //send to eisc
+                    //uint channelNumber = (uint)item.number; this is not necessary when we sort EPG by channel ID
                     epgEisc.SetSerial(i, item.programs[0].name);
                     epgEisc.SetSerial(i + 1, item.programs[0].episodeDescription);
 
@@ -263,16 +280,16 @@ namespace ThePitch_Primary //CHANGE EISCS BEFORE DEPLOYMENT
             }
             catch (Exception e)
             {
-                CrestronConsole.PrintLine($"Exception in GetEPG in ControlSystem.cs: {e.StackTrace}");
-                CrestronConsole.PrintLine($"Exception: {e.Message}");
+                ErrorLog.Error($"Exception in GetEPG in ControlSystem.cs: {e.StackTrace}");
+                ErrorLog.Error($"Exception: {e.Message}");
             }
 
         }
 
         public void GetCurrentlyPlayingOnEndpoints()
         {
-            //testing this code block
-            uint i = currentProgramOnEndpointStartIndex;
+            
+            uint i = 0;
             foreach (var item in commMgr.EndpointList.items)
             {
                 try
@@ -288,36 +305,192 @@ namespace ThePitch_Primary //CHANGE EISCS BEFORE DEPLOYMENT
                         var chanIndex = commMgr.ChannelLineUp.items.FindIndex(a => a.number.Equals(searchNum));
 
                         //output to debug if necessary
-                        if (Debug.ZBandDebugEnabled) CrestronConsole.PrintLine($"chanIndex: {chanIndex}");
+                        if (Debug.ZBandDebugEnabled)
+                        {
+                            ErrorLog.Notice($"Endpoint: {item.name}");
+                            ErrorLog.Notice($"Endpoint Current Channel: {item.playingChannel1Number}");
+                            ErrorLog.Notice($"Searching for current channel number in Channel List...");
+                            ErrorLog.Notice($"Found current channel for endpoint {i}:{item.name} at list Index: {chanIndex}");
+                            ErrorLog.Notice($"\n");
+                        }   
 
                         //if the chanIndex is not -1, its been found in the list, set serial to that program's name to keep track of current program on each endpoint
                         if (chanIndex != -1)
                         {   //send to EISC
-                            endpointEisc.SetSerial(i, commMgr.EPGLineUp.items[chanIndex].programs[0].name);
+                            endpointEisc.SetSerial(i + endpointNowPlayingProgramName + 1, commMgr.EPGLineUp.items[chanIndex].programs[0].name); //use '0' index because we only want whats playing at this second
                         }
                     }
                 }
                 catch (Exception e)
                 {
-                    CrestronConsole.PrintLine($"Error in GetEPG of ControlSystem.cs: {e.Message}");
+                    ErrorLog.Error($"Error in GetEPG of ControlSystem.cs: {e.Message}");
                 }
 
                 i++;
             }
         }
 
+        private string BuildSetChannelBody( uint endpointNumber, ushort endpointRouteValue)
+        {
+            string requestBody = "";
+
+            //test if the incoming channel selection falls within the amount of channel on offer currently
+            if (endpointRouteValue <= commMgr.ChannelLineUp.items.Count - 1)
+            {
+                //send the currently selected channel's program info (name) to serial (100 + endpoint number) and the channel name and number to serials endpointNumber + 1 and +2
+                endpointEisc.SetSerial(endpointNumber + endpointNowPlayingNameJoinOffset, commMgr.ChannelLineUp.items[endpointRouteValue].name);
+                endpointEisc.SetSerial(endpointNumber + endpointNowPlayingNumberJoinOffset, commMgr.ChannelLineUp.items[endpointRouteValue].number.ToString());
+                endpointEisc.SetSerial(endpointNumber + endpointNowPlayingProgramName, commMgr.EPGLineUp.items[endpointRouteValue].programs[0].name);
+
+                //debug print
+                if (Debug.SystemDebugEnabled)
+                    ErrorLog.Notice($"Incoming Route Change. Endpoint: {endpointNumber} | Channel: {endpointRouteValue}");
+
+                //create actionparams for request body json 
+                List<ActionParameter> actionparams = new List<ActionParameter>
+                {
+                    new ActionParameter { name = "Emergency", value = "false"},
+                    new ActionParameter { name = "Fullscreen", value = "false"},
+                    new ActionParameter { name = "Type", value = commMgr.ChannelLineUp.items[endpointRouteValue].type},
+                    new ActionParameter { name = "IP", value = commMgr.ChannelLineUp.items[endpointRouteValue].iPAddress},
+                    new ActionParameter { name = "Port", value = commMgr.ChannelLineUp.items[endpointRouteValue].port.ToString()},
+                    new ActionParameter { name = "EncryptionType", value = commMgr.ChannelLineUp.items[endpointRouteValue].encryptionType},
+                    new ActionParameter { name = "EncryptionKey", value = commMgr.ChannelLineUp.items[endpointRouteValue].encryptionKey ?? ""},
+                    new ActionParameter { name = "DecoderIndex", value = "0"},
+                    new ActionParameter { name = "Id", value = commMgr.ChannelLineUp.items[endpointRouteValue].id.ToString()} //id is not listed in API as required but it is
+                };
+
+                //more params for request body
+                List<ActionTarget> targetList = new List<ActionTarget>
+                {
+                    new ActionTarget { id =commMgr.EndpointList.items[(int)endpointNumber - 1].id, cmdTargetType = "Endpoint" }
+                };
+
+                //request body proper (JSON) by creating a JSON object to serialze and attach to the request (body)
+                SetChannelJsonObject setChannelRequestBody = new SetChannelJsonObject
+                {
+                    action = "LoadChannel",
+                    actionCluster = "DSS",
+                    actionParameters = actionparams,
+                    actionTargets = targetList,
+
+                };
+
+                //serialize request body JSON into string
+                requestBody = JsonConvert.SerializeObject(setChannelRequestBody);
+
+
+                if (Debug.ZBandDebugEnabled)
+                    ErrorLog.Notice($"Request Body: {requestBody}");
+            }
+            else
+            {
+                if (Debug.ZBandDebugEnabled) ErrorLog.Warn($"Channel index requested is not within the enabled channel list.");
+            }
+
+            //Make request
+            return requestBody;
+
+        }
+
+        private string BuildSetChannelByGroupBody(ushort endpointRouteValue, string GroupID)
+        {
+            string requestBody = "";
+            //test if the incoming channel selection falls within the amount of channel on offer currently
+            if (endpointRouteValue <= commMgr.ChannelLineUp.items.Count - 1) //needs testing
+            {
+                //send the currently selected channel's program info (name) to serial (100 + endpoint number) 
+                //endpointEisc.SetSerial(endpointNumber + 100, commMgr.EPGLineUp.items[endpointRouteValue].programs[0].name);
+
+                //debug print
+                if (Debug.SystemDebugEnabled)
+                    CrestronConsole.PrintLine($"Incoming Route Change. Group: {GroupID} | Channel: {endpointRouteValue}");
+
+
+
+                //create actionparams for request body json 
+                List<ActionParameter> actionparams = new List<ActionParameter>
+                {
+                    new ActionParameter { name = "Emergency", value = "false"},
+                    new ActionParameter { name = "Fullscreen", value = "false"},
+                    new ActionParameter { name = "Type", value = commMgr.ChannelLineUp.items[endpointRouteValue].type},
+                    new ActionParameter { name = "IP", value = commMgr.ChannelLineUp.items[endpointRouteValue].iPAddress},
+                    new ActionParameter { name = "Port", value = commMgr.ChannelLineUp.items[endpointRouteValue].port.ToString()},
+                    new ActionParameter { name = "EncryptionType", value = commMgr.ChannelLineUp.items[endpointRouteValue].encryptionType},
+                    new ActionParameter { name = "EncryptionKey", value = commMgr.ChannelLineUp.items[endpointRouteValue].encryptionKey ?? ""},
+                    new ActionParameter { name = "DecoderIndex", value = "0"},
+                };
+
+                //more params for request body
+                List<ActionTarget> targetList = new List<ActionTarget>
+                {
+                    new ActionTarget { id = GroupID, cmdTargetType = "Group" }
+                };
+
+                //request body proper (JSON) by creating a JSON object to serialze and attach to the request (body)
+                SetChannelJsonObject setChannelRequestBody = new SetChannelJsonObject
+                {
+                    action = "LoadChannel",
+                    actionCluster = "DSS",
+                    actionParameters = actionparams,
+                    actionTargets = targetList,
+
+                };
+
+                //serialize request body JSON into string
+                requestBody = JsonConvert.SerializeObject(setChannelRequestBody);
+
+
+                if (Debug.ZBandDebugEnabled)
+                    CrestronConsole.PrintLine($"Request Body: {requestBody}");
+            }
+            //Make request
+            return requestBody;
+        }
+
 
         //********************************      EISC Event Handlers     ******************************//
         private void Eisc_event(object sender, EiscEventArgs e)
         {
-            if (Debug.SystemDebugEnabled) CrestronConsole.PrintLine($"Eisc Event Fired {e.Message}");
+            if (Debug.SystemDebugEnabled) ErrorLog.Notice($"Eisc Event Fired {e.Message}");
+
+            //set var _systemReadyForRouting = to the AND of all eisc online signals
+            _systemReadyForRouting = endpointEisc.Online & channelEisc.Online & digitalEisc.Online & epgEisc.Online;
+            if (Debug.SystemDebugEnabled) ErrorLog.Notice($"All EISCs online. Ready for Channel Routing");
 
             switch (e.Args.Sig.Type)
             {
                 case eSigType.Bool:
                     {
-                        if (Debug.SystemDebugEnabled) CrestronConsole.PrintLine($"EISC Digital {e.Args.Sig.Number} changed to {e.Args.Sig.BoolValue}");
-                        
+                        if (Debug.SystemDebugEnabled) ErrorLog.Notice($"EISC Digital {e.Args.Sig.Number} changed to {e.Args.Sig.BoolValue}");
+
+                        //run switch to set debugging values
+                        switch (e.Args.Sig.Number)
+                        {
+                            case (uint)Joins.SetSystemDebugging:
+                                if (e.Args.Sig.BoolValue)
+                                {
+                                    SetSystemDebugging("on");
+                                }
+                                else
+                                {
+                                    SetSystemDebugging("off");
+                                }
+                                break;
+
+                            case (uint)Joins.SetZBandDebugging:
+                                if (e.Args.Sig.BoolValue)
+                                {
+                                    SetZBandDebugging("on");
+                                }
+                                else
+                                {
+                                    SetZBandDebugging("off");
+                                }
+                                break;
+                        }
+
+                        //now run switch for all other digitals
                         if (e.Args.Sig.BoolValue) //this stops things from happening when the EISC first connects unless the signals in SimplWindows are high at logic start
                         {
                             uint join = e.Args.Sig.Number;
@@ -347,6 +520,8 @@ namespace ThePitch_Primary //CHANGE EISCS BEFORE DEPLOYMENT
                         if (Debug.SystemDebugEnabled) 
                             CrestronConsole.PrintLine($"EISC Analog {e.Args.Sig.Number} changed to {e.Args.Sig.UShortValue}");
 
+                        
+
                         //check that simpl windows program is ready to start sending valid info, after that start processing anything that comes from it.
                         if (_systemReadyForRouting)
                         {
@@ -355,60 +530,17 @@ namespace ThePitch_Primary //CHANGE EISCS BEFORE DEPLOYMENT
                             uint endpointNumber = e.Args.Sig.Number;
                             ushort endpointRouteValue = e.Args.Sig.UShortValue;
 
-                            //send the currently selected channel number to the feedback side of the EISC for Fb per endpoint
-                            endpointEisc.SetAnalog(endpointNumber, endpointRouteValue);
+                            //call BuildSetChannelBody method to generate requestBody string
+                            string requestBody = BuildSetChannelBody(endpointNumber, endpointRouteValue); //<--try this instead of everything above
 
-
-                            //test if the incoming channel selection falls within the amount of channel on offer currently
-                            if (endpointRouteValue <= commMgr.ChannelLineUp.items.Count - 1) //needs testing
+                            if (!String.IsNullOrEmpty(requestBody)) //protects against making requests with empty body, i.e. the channel index was outside the range of the channel list
                             {
-                                //send the currently selected channel's program info (name) to serial (100 + endpoint number) 
-                                endpointEisc.SetSerial(endpointNumber + 100, commMgr.EPGLineUp.items[endpointRouteValue].programs[0].name);
-
-                                //debug print
-                                if (Debug.SystemDebugEnabled)
-                                    CrestronConsole.PrintLine($"Incoming Route Change. Endpoint: {endpointNumber} | Channel: {endpointRouteValue}");
-
-
-
-                                //create actionparams for request body json 
-                                List<ActionParameter> actionparams = new List<ActionParameter>
-                                {
-                                    new ActionParameter { name = "Emergency", value = "false"},
-                                    new ActionParameter { name = "Fullscreen", value = "false"},
-                                    new ActionParameter { name = "Type", value = commMgr.ChannelLineUp.items[endpointRouteValue].type},
-                                    new ActionParameter { name = "IP", value = commMgr.ChannelLineUp.items[endpointRouteValue].iPAddress},
-                                    new ActionParameter { name = "Port", value = commMgr.ChannelLineUp.items[endpointRouteValue].port.ToString()},
-                                    new ActionParameter { name = "EncryptionType", value = commMgr.ChannelLineUp.items[endpointRouteValue].encryptionType},
-                                    new ActionParameter { name = "EncryptionKey", value = commMgr.ChannelLineUp.items[endpointRouteValue].encryptionKey ?? ""},
-                                    new ActionParameter { name = "DecoderIndex", value = "0"},
-                                };
-
-                                //more params for request body
-                                List<ActionTarget> targetList = new List<ActionTarget>
-                                {
-                                    new ActionTarget { id =commMgr.EndpointList.items[(int)endpointNumber - 1].id, cmdTargetType = "Endpoint" }
-                                };
-
-                                //request body proper (JSON) by creating a JSON object to serialze and attach to the request (body)
-                                SetChannelJsonObject setChannelRequestBody = new SetChannelJsonObject
-                                {
-                                    action = "LoadChannel",
-                                    actionCluster = "DSS",
-                                    actionParameters = actionparams,
-                                    actionTargets = targetList,
-
-                                };
-
-                                //serialize request body JSON into string
-                                var requestBody = JsonConvert.SerializeObject(setChannelRequestBody);
-
-
-                                if (Debug.ZBandDebugEnabled)
-                                    CrestronConsole.PrintLine($"Request Body: {requestBody}");
-
                                 //Make request
                                 commMgr.SetChannel(requestBody);
+
+                                //send the currently selected channel number to the feedback side of the EISC for Fb per endpoint
+                                //setting this in this way presumes the setchannel action is successful
+                                endpointEisc.SetAnalog(endpointNumber, endpointRouteValue);
                             }
                         }
 
@@ -428,7 +560,7 @@ namespace ThePitch_Primary //CHANGE EISCS BEFORE DEPLOYMENT
             }
         }
 
-
+    
 
 
     }

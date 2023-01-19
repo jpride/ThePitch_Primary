@@ -1,23 +1,25 @@
 ﻿using System;
 using Crestron.SimplSharp;
 using Crestron.SimplSharpPro;
+using Crestron.SimplSharp.CrestronIO;
 using Crestron.SimplSharpPro.DeviceSupport;
 using Crestron.SimplSharpPro.EthernetCommunication;
 using ThePitch_Primary;
 
 namespace TSI.HelperClasses
 {
-    public class Eisc
+    public class Eisc : IEisc
     {
 
         private uint _ID;
         private string _ipAddress;
+        private bool controlSystemIsVirtual = false;
 
-        //use EthernetIntersystemCommunications for 4 series appliances, but no VC4
-        EthernetIntersystemCommunications _eisc;
+        //use EthernetIntersystemCommunications for 4 series appliances, but not VC4
+        //EthernetIntersystemCommunications _eisc;
 
         //use EISCServer for VC4 platforms
-        //EISCServer _eisc;
+       readonly EISCServer _eisc;
 
         public bool Online
         {
@@ -25,32 +27,43 @@ namespace TSI.HelperClasses
         }
 
         public event EventHandler<EiscEventArgs> _eiscEvent;
+        
 
         public Eisc(uint ID, string IPaddress, ControlSystem cs, string Description)
         {
             //4 Series Appliances
-            _eisc = new EthernetIntersystemCommunications(ID, IPaddress, cs);
-            
-            //VC4
-            //_eisc = new EISCServer(ID, cs);
+            //_eisc = new EthernetIntersystemCommunications(ID, IPaddress, cs);
 
-            _eisc.Description = Description;  
-            
+            //VC4
+            _eisc = new EISCServer(ID, cs);
+
+
+            _eisc.Description = Description;
+
             _eisc.Register();
             _eisc.OnlineStatusChange += eisc_OnlineStatusChange;
             _eisc.SigChange += eisc_SigChange;
 
-            if (_eisc.IsOnline) CrestronConsole.PrintLine($"EISC - {Description}: Online");
-            
-            
+            if (_eisc.IsOnline) CrestronConsole.PrintLine($"{Description}(EISC): Online");
+
+
 
             _ID = ID; //store the ID we were set to
             _ipAddress = IPaddress; //store the IPaddress we used
 
-            CrestronConsole.PrintLine("EISC Created");
+            CrestronConsole.PrintLine($"EISC Created: {_ID} @ {_ipAddress}");
         }
 
-     
+        //not used here but should explore its potential later
+        public void CheckControlSystemType(ControlSystem cs)
+        {
+            string rootDir = Directory.GetApplicationRootDirectory();
+
+            if (String.IsNullOrEmpty(rootDir))
+            {
+                controlSystemIsVirtual = true;
+            }
+        }
 
 
 
