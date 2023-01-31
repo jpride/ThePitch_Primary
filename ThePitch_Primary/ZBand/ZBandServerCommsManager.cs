@@ -299,6 +299,48 @@ namespace ZBand_EZTV
             }
         }
 
+        /// <summary>
+        /// Send request to send Power On/Off command to endpoint defined inside request body
+        /// </summary>
+        /// <param name="requestBody"></param>
+        public void SetPower(string requestBody)
+        {
+            try
+            {
+                //check token and take appropraite action
+                PreAuthorize();
+
+                //construct apiPath with Params
+                string apiPath = "events/immediate/activities";
+
+                //create request
+                HttpResponseObject rsp = new HttpResponseObject();
+                rsp = wr.CreateWebRequestWithApiTokenandRequestBody(apiPath, "POST", requestBody);
+
+                //test status code for success
+                if (rsp.statusCode != HttpStatusCode.Created)
+                {
+                    ErrorLog.Error($"Endpoint TV Power Request Failed with Status Code: {rsp.statusCode}");
+                    if (Debug.ErrorLogEnabled) ErrorLog.Warn($"Endpoint TV Power Request Failed. Status Code: {rsp.statusCode}");
+                    PreAuthorize();
+                    return;
+                }
+                else
+                {
+                    if (Debug.ZBandDebugEnabled)
+                    {
+                        ErrorLog.Notice($"Successfully sent Set Endpoint TV Power request. Response: {rsp.responseBody}");
+                        if (Debug.ErrorLogEnabled) ErrorLog.Notice($"Successfully sent Set Endpoint TV Power request. Repsonse: {rsp.responseBody}");
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                ErrorLog.Error($"Exception in SetPower: {e.Message}");
+                if (Debug.ErrorLogEnabled) ErrorLog.Error($"Exception in SetPower: {e.Message}");
+            }
+        }
+
 
 
         //**************************************************    Channel Operations      ***************************************************//

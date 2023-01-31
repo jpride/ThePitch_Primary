@@ -7,7 +7,7 @@ using ZBand_EZTV;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 using TSI.DebugUtilities;
-
+using ThePitch_Primary.ZBand.JsonObjects;
 
 namespace ThePitch_Primary 
 {
@@ -35,6 +35,38 @@ namespace ThePitch_Primary
             SetZBandDebugging = 6,
         }
 
+        public enum PowerJoins
+        { 
+            Bar1PowerOn = 10,
+            Bar1PowerOff = 11,
+            Bar2PowerOn = 12,
+            Bar2PowerOff = 13,
+            Bar3PowerOn = 14,
+            Bar3PowerOff = 15,
+            Bar4PowerOn = 16,
+            Bar4PowerOff = 17,
+            NorthLounge1PowerOn = 18,
+            NorthLounge1PowerOff = 19,
+            NorthLounge2PowerOn = 20,
+            NorthLounge2PowerOff = 21,
+            NorthLounge3PowerOn = 22,
+            NorthLounge3PowerOff = 23,
+            WestLounge1PowerOn = 24,
+            WestLounge1PowerOff = 25,
+            WestLounge2PowerOn = 26,
+            WestLounge2PowerOff = 27,
+            SouthLounge1PowerOn = 28,
+            SouthLounge1PowerOff = 29,
+            SouthLounge2PowerOn = 30,
+            SouthLounge2PowerOff = 31,
+            SouthLounge3PowerOn = 32,
+            SouthLounge3PowerOff = 33,
+            SouthLounge4PowerOn = 34,
+            WestLounge4PowerOff = 35,
+            PrivatePowerOn = 36,
+            PrivatePowerOff = 37
+        }
+
         private uint endpointNowPlayingNameJoinOffset = 30;
         private uint endpointNowPlayingNumberJoinOffset = 60;
         private uint endpointNowPlayingProgramName = 100;
@@ -45,7 +77,7 @@ namespace ThePitch_Primary
 
         private string ZBand_Username = "admin@dss-internal";
         private string ZBand_Password = "1qaz!QAZ";
-        private string ZBand_ServerIP = "10.14.1.10";
+        private string ZBand_ServerIP = "192.168.8.50";
 
         
 
@@ -381,7 +413,7 @@ namespace ThePitch_Primary
 
 
                 if (Debug.ZBandDebugEnabled)
-                    ErrorLog.Notice($"Request Body: {requestBody}");
+                    ErrorLog.Notice($"Set Channel Request Body: {requestBody}");
             }
             else
             {
@@ -448,6 +480,123 @@ namespace ThePitch_Primary
             return requestBody;
         }
 
+        private string BuildTVControlRequestBody(uint powerJoin)
+        {
+            string requestBody = "";
+            string actionVar;
+            uint endpointIndex = 0;
+
+            //test if the incoming channel selection falls within the amount of channel on offer currently
+            if (powerJoin >= (uint)PowerJoins.Bar1PowerOn & powerJoin <= (uint)PowerJoins.PrivatePowerOff)
+            {
+                //create actionparams for request body json 
+                List<ActionParameter> actionparams = new List<ActionParameter>();
+
+
+                //set a local var for TVOn or TVOff
+                if (powerJoin % 2 == 0) //if the powerJoin is even, then we know its a "TVOn" request
+                {
+                    actionVar = "TVOn";
+                }
+                else
+                {
+                    actionVar = "TVOff";
+                }
+
+                //gather the endpoint ID here with a switch statement
+                switch (powerJoin)
+                {
+                    case (uint)PowerJoins.Bar1PowerOn | (uint)PowerJoins.Bar1PowerOff:
+                        endpointIndex = 0;
+                        break;
+
+                    case (uint)PowerJoins.Bar2PowerOn | (uint)PowerJoins.Bar2PowerOff:
+                        endpointIndex = 1;
+                        break;
+
+                    case (uint)PowerJoins.Bar3PowerOn | (uint)PowerJoins.Bar3PowerOff:
+                        endpointIndex = 2;
+                        break;
+
+                    case (uint)PowerJoins.Bar4PowerOn | (uint)PowerJoins.Bar4PowerOff:
+                        endpointIndex = 3;
+                        break;
+
+                    case (uint)PowerJoins.NorthLounge1PowerOn | (uint)PowerJoins.NorthLounge1PowerOff:
+                        endpointIndex = 4;
+                        break;
+
+                    case (uint)PowerJoins.NorthLounge2PowerOn | (uint)PowerJoins.NorthLounge2PowerOff:
+                        endpointIndex = 5;
+                        break;
+
+                    case (uint)PowerJoins.NorthLounge3PowerOn | (uint)PowerJoins.NorthLounge3PowerOff:
+                        endpointIndex = 6;
+                        break;
+
+                    case (uint)PowerJoins.WestLounge1PowerOn | (uint)PowerJoins.WestLounge1PowerOff:
+                        endpointIndex = 7;
+                        break;
+
+                    case (uint)PowerJoins.WestLounge2PowerOn | (uint)PowerJoins.WestLounge2PowerOff:
+                        endpointIndex = 8;
+                        break;
+
+                    case (uint)PowerJoins.SouthLounge1PowerOn | (uint)PowerJoins.SouthLounge1PowerOff:
+                        endpointIndex = 9;
+                        break;
+
+                    case (uint)PowerJoins.SouthLounge2PowerOn | (uint)PowerJoins.SouthLounge2PowerOff:
+                        endpointIndex = 10;
+                        break;
+
+                    case (uint)PowerJoins.SouthLounge3PowerOn | (uint)PowerJoins.SouthLounge3PowerOff:
+                        endpointIndex = 11;
+                        break;
+
+                    case (uint)PowerJoins.SouthLounge4PowerOn | (uint)PowerJoins.SouthLounge3PowerOff:
+                        endpointIndex = 12;
+                        break;
+
+                    case (uint)PowerJoins.PrivatePowerOn | (uint)PowerJoins.PrivatePowerOff:
+                        endpointIndex = 13;
+                        break;
+                }
+
+
+                //more params for request body
+                List<ActionTarget> targetList = new List<ActionTarget>
+                {
+                    new ActionTarget { id =commMgr.EndpointList.items[(int)endpointIndex].id, cmdTargetType = "Endpoint" }
+                };
+
+                //request body proper (JSON) by creating a JSON object to serialze and attach to the request (body)
+                TVPowerActionObject tvPowerActionRequestBody = new TVPowerActionObject
+                {
+                    action = actionVar,
+                    actionCluster = "DSS",
+                    actionParameters = actionparams,
+                    actionTargets = targetList,
+
+                };
+
+                //serialize request body JSON into string
+                requestBody = JsonConvert.SerializeObject(tvPowerActionRequestBody);
+
+
+                if (Debug.ZBandDebugEnabled)
+                    ErrorLog.Notice($"TV Power Request Body: {requestBody}");
+            }
+            else
+            {
+                if (Debug.ZBandDebugEnabled) ErrorLog.Warn($"Channel index requested is not within the enabled channel list.");
+            }
+
+            //Make request
+            return requestBody;
+
+        }
+
 
         //********************************      EISC Event Handlers     ******************************//
         private void Eisc_event(object sender, EiscEventArgs e)
@@ -488,6 +637,15 @@ namespace ThePitch_Primary
                                     SetZBandDebugging("off");
                                 }
                                 break;
+
+
+                            default: //send power joins to function
+                                if (e.Args.Sig.BoolValue)
+                                {
+                                    string requestBody = BuildTVControlRequestBody(e.Args.Sig.Number);
+                                    commMgr.SetPower(requestBody);
+                                }
+                                break;
                         }
 
                         //now run switch for all other digitals
@@ -514,7 +672,10 @@ namespace ThePitch_Primary
                             }
                         }
                         break;
+
+                        
                     }
+
                 case eSigType.UShort:
                     {
                         if (Debug.SystemDebugEnabled) 
@@ -560,8 +721,6 @@ namespace ThePitch_Primary
             }
         }
 
-    
-
-
+        
     }
 }
