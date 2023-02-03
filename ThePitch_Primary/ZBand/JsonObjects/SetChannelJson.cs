@@ -1,8 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 
-namespace ThePitch_Primary
+namespace ZBand_EZTV
 {
     public class ActionParameter
     {

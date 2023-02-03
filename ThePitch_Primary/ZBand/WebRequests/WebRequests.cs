@@ -13,6 +13,7 @@ namespace TSI.WebRequestUtilities
         {
             HttpWebRequest request = WebRequest.Create("https://" + ZBandServerCommsManager.serverAddressPath + apiPath) as HttpWebRequest;
             request.Proxy = null;
+            request.Timeout = 2000; //this line added to avoid locking the program up at start when the server cannot be reached
             request.Method = requestMethod;
             request.ContentLength = 0;
             request.Headers.Add("Authorization", "Bearer " + ZBandServerCommsManager.apiToken);
@@ -45,6 +46,7 @@ namespace TSI.WebRequestUtilities
         {
             HttpWebRequest request = WebRequest.Create("https://" + ZBandServerCommsManager.serverAddressPath + apiPath) as HttpWebRequest;
             request.Proxy = null;
+            request.Timeout = 2000; //this line added to avoid locking the program up at start when the server cannot be reached
             request.Method = requestMethod;
             request.Headers.Add("Authorization", "Bearer " + ZBandServerCommsManager.apiToken);
             request.Accept = "*/*";
@@ -86,6 +88,7 @@ namespace TSI.WebRequestUtilities
         {
             HttpWebRequest request = WebRequest.Create("https://" + ZBandServerCommsManager.serverAddressPath + apiPath) as HttpWebRequest;
             request.Proxy = null;
+            request.Timeout = 2000; //this line added to avoid locking the program up at start when the server cannot be reached
             request.Method = requestMethod;
             //request.Headers.Add("Authorization", "Bearer " + ZBandServerCommsManager.apiToken);
             request.Accept = "*/*";

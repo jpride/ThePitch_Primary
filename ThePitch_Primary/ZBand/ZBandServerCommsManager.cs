@@ -17,7 +17,7 @@ namespace ZBand_EZTV
         WebRequests wr = new WebRequests();
 
         //server vars that will be initialized in the initializer method
-        private static string apiRootPath = "/eztv/api/";
+        private static string _apiRootPath = "/eztv/api/";
         public static string serverAddressPath; //initialized in the InitializeCommsManager method
 
         //an object that will hold channel info
@@ -65,7 +65,7 @@ namespace ZBand_EZTV
         //*************************************************             Init          ****************************************************************//
         public void InitializeCommsManager()
         {
-            serverAddressPath = _serverIP + apiRootPath;
+            serverAddressPath = _serverIP + _apiRootPath;
 
             if (Debug.ZBandDebugEnabled)
             {
@@ -73,7 +73,14 @@ namespace ZBand_EZTV
                 ErrorLog.Notice($"U/P: {_username}:{_password}");
             }
 
-            LoginRequest();
+            try
+            {
+                LoginRequest();
+            }
+            catch (Exception ex)
+            {
+                ErrorLog.Error($"Error in InitializeCommsManager: LoginRequest()");
+            }
         }
 
 
@@ -99,6 +106,7 @@ namespace ZBand_EZTV
                 //create request
                 HttpResponseObject rsp = new HttpResponseObject();
                 rsp = wr.CreateWebRequestWithRequestBodyOnly(apiPath, "POST", requestBody);
+
 
                 //create login event args
                 LoginEventArgs args = new LoginEventArgs();
@@ -126,6 +134,10 @@ namespace ZBand_EZTV
                 args.isLoggedIn = isLoggedIn;
                 LoginEvent?.Invoke(this, args);
 
+            }
+            catch (WebException we) when (we.Status == WebExceptionStatus.Timeout)
+            {
+                ErrorLog.Error($"WebException in LoginRequest. The process timed out");
             }
             catch (Exception e)
             {
@@ -303,7 +315,7 @@ namespace ZBand_EZTV
         /// Send request to send Power On/Off command to endpoint defined inside request body
         /// </summary>
         /// <param name="requestBody"></param>
-        public void SetPower(string requestBody)
+        public void RunImmediateEvent(string requestBody)
         {
             try
             {
@@ -341,7 +353,43 @@ namespace ZBand_EZTV
             }
         }
 
+        public void RunEvent(string eventID)
+        {
+            try
+            {
+                //check token and take appropraite action
+                PreAuthorize();
 
+                //construct apiPath with Params
+                string apiPath = String.Format($"events/{eventID}/start_now");
+
+                //create request
+                HttpResponseObject rsp = new HttpResponseObject();
+                rsp = wr.CreateWebRequestWithApiToken(apiPath, "POST");
+
+                //test status code for success
+                if (rsp.statusCode != HttpStatusCode.OK)
+                {
+                    ErrorLog.Error($"EventCallbyID Request Failed with Status Code: {rsp.statusCode}");
+                    if (Debug.ErrorLogEnabled) ErrorLog.Warn($"EventCallbyID Request Failed. Status Code: {rsp.statusCode}");
+                    PreAuthorize();
+                    return;
+                }
+                else
+                {
+                    if (Debug.ZBandDebugEnabled)
+                    {
+                        ErrorLog.Notice($"Successfully sent EventCallbyID request. Response: {rsp.responseBody}");
+                        if (Debug.ErrorLogEnabled) ErrorLog.Notice($"Successfully sent EventCallbyID request. Repsonse: {rsp.responseBody}");
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                ErrorLog.Error($"Exception in RunEvent: {e.Message}");
+                if (Debug.ErrorLogEnabled) ErrorLog.Error($"Exception in RunEvent: {e.Message}");
+            }
+        }
 
         //**************************************************    Channel Operations      ***************************************************//
         /// <summary>
@@ -390,8 +438,6 @@ namespace ZBand_EZTV
 
         }
 
-
-
         //**************************************************    EPG Operations      *******************************************************//
         /// <summary>
         /// Requests EPG Data for all "allowed" channels for now to 15 min from now. 
@@ -410,12 +456,13 @@ namespace ZBand_EZTV
 
             //set other request params
             string offset = "offset=0";
-            string limit = "limit=100";
+            string limit = "limit=100"; //ZBAND IS LIMITED TO 100 CHANNELS
             string targetuseragent = "targetuseragent=PC_Mac";
-            string sort = "sort=id"; //sort EPG data by Channel to keep the list in an order we expect
+            string sort = "sort=id"; //sort EPG data by Channel to keep the list in an order we expect THIS IS CRITICAL AS IT SORTS THE LIST SUCH THAT THE ORDER IS ALWAYS MAINTAINED FOR UIs
+            string filter = "filter=enabled::true"; //only request info for channels that are enabled THIS IS CRITICAL AS IT OMITS DISABLED CHANNELS
 
             //create an api path with the time frame included
-            string apiPath = "epg?" + offset + "&" + limit + "&from=" + nowString + "&to=" + fifteenMinFromNowString + "&" + targetuseragent + "&" + sort;
+            string apiPath = "epg?" + offset + "&" + limit + "&from=" + nowString + "&to=" + fifteenMinFromNowString + "&" + targetuseragent + "&" + sort + "&" + filter;
 
 
             try
@@ -451,8 +498,6 @@ namespace ZBand_EZTV
             }
 
         }
-
-
 
         //**************************************************    Groups Operations      *******************************************************//
         /// <summary>

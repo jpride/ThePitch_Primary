@@ -7,7 +7,6 @@ using ZBand_EZTV;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 using TSI.DebugUtilities;
-using ThePitch_Primary.ZBand.JsonObjects;
 
 namespace ThePitch_Primary 
 {
@@ -35,7 +34,7 @@ namespace ThePitch_Primary
             SetZBandDebugging = 6,
         }
 
-        public enum PowerJoins
+        public enum PowerJoinsPerDisplay
         { 
             Bar1PowerOn = 10,
             Bar1PowerOff = 11,
@@ -64,8 +63,55 @@ namespace ThePitch_Primary
             SouthLounge4PowerOn = 34,
             WestLounge4PowerOff = 35,
             PrivatePowerOn = 36,
-            PrivatePowerOff = 37
+            PrivatePowerOff = 37,
+            Patio1PowerOn = 38,
+            Patio1PowerOff = 39,
+            Patio2PowerOn = 40,
+            Patio2PowerOff = 41,
+            Patio3PowerOn = 42,
+            Patio3PowerOff = 43,
         }
+
+        public enum PowerEventJoins
+        { 
+            AllPowerOn = 70,
+            AllPowerOff = 71,
+            BarPowerOn = 72,
+            BarPowerOff = 73,
+            NorthPowerOn = 74,
+            NorthPowerOff = 75,
+            WestPowerOn = 76,
+            WestPowerOff = 77,
+            SouthPowerOn = 78,
+            SouthPowerOff = 79,
+            PrivatePowerOn = 80,
+            PrivatePowerOff = 81,
+            PatioPowerOn = 82,
+            PatioPowerOff = 83
+        }
+
+        //Hardcoded Event IDs for Display Power Control
+        public string AllPwrOnEventID = "63d990d55b8e4e1c541f67fa";
+        public string AllPwrOffEventID = "63d990c55b8e4e1c541f67f8";
+
+        public string BarPwrOnEventID = "63d973ae5b8e4e1c541f674f";
+        public string BarPwrOffEventID = "63d973345b8e4e1c541f6741";
+
+        public string NorthPwrOnEventID = "63d975905b8e4e1c541f6783";
+        public string NorthPwrOffEventID = "63d9754f5b8e4e1c541f6776";
+
+        public string WestPwrOnEventID = "63d975ea5b8e4e1c541f679d";
+        public string WestPwrOffEventID = "63d975bb5b8e4e1c541f6790";
+
+        public string SouthPwrOnEventID = "63d9752f5b8e4e1c541f6769";
+        public string SouthPwrOffEventID = "63d975085b8e4e1c541f675c";
+
+        public string PrivatePwrOnEventID = "63d976645b8e4e1c541f67ac";
+        public string PrivatePwrOffEventID = "63d976505b8e4e1c541f67aa";
+
+        public string PatioPwrOnEventID = "63d976c95b8e4e1c541f67c7";
+        public string PatioPwrOffEventID = "63d976b85b8e4e1c541f67c4";
+
 
         private uint endpointNowPlayingNameJoinOffset = 30;
         private uint endpointNowPlayingNumberJoinOffset = 60;
@@ -77,7 +123,7 @@ namespace ThePitch_Primary
 
         private string ZBand_Username = "admin@dss-internal";
         private string ZBand_Password = "1qaz!QAZ";
-        private string ZBand_ServerIP = "192.168.8.50";
+        private string ZBand_ServerIP = "192.168.25.50";
 
         
 
@@ -122,8 +168,9 @@ namespace ThePitch_Primary
             {
                 var programThread = new Thread(() =>
                     {
-                        CrestronConsole.PrintLine("Creating program thread");
+                        ErrorLog.Notice("Creating program thread");
 
+                        
                         //set important vars for commMgr
                         commMgr.UserName = ZBand_Username;
                         commMgr.Password = ZBand_Password;
@@ -132,9 +179,11 @@ namespace ThePitch_Primary
                         //subscribe to LoginEvents
                         commMgr.LoginEvent += CommMgr_LoginEvent;
 
+                        
                         //initialize commMgr
                         commMgr.InitializeCommsManager();
-
+                        
+                        
                         //create console commands for testing
                         CrestronConsole.AddNewConsoleCommand(
                             GetEndpoints,
@@ -165,6 +214,7 @@ namespace ThePitch_Primary
                             "SetZBandDebugging",
                             "Sets ZBand Debug variable to on/off so System Debug messages are active.",
                             ConsoleAccessLevelEnum.AccessOperator);
+                        
                     });
 
                 programThread.Start();
@@ -251,6 +301,7 @@ namespace ThePitch_Primary
                 {
                     ErrorLog.Notice($"Endpoint: {item.name}");
                     ErrorLog.Notice($"Endpoint Now Playing: {item.playingChannel1Number} | {item.playingChannel1Name}");
+                    ErrorLog.Notice($"\n");
                 }
 
                 endpointEisc.SetSerial(i, item.name);
@@ -273,8 +324,13 @@ namespace ThePitch_Primary
             uint i = 1;
             foreach (var item in commMgr.ChannelLineUp.items)
             {
-                if (Debug.ZBandDebugEnabled) ErrorLog.Notice($"Channel: {item.name}");
-                channelEisc.SetSerial(i, item.name);
+                if (Debug.ZBandDebugEnabled)
+                {
+                    ErrorLog.Notice($"Channel: {item.name}");
+                    ErrorLog.Notice($"\n");
+                }
+
+                channelEisc.SetSerial(i, item.name); //update UI Slot with Channel Name
                 i++;
             }
         }
@@ -301,7 +357,7 @@ namespace ThePitch_Primary
 
                     //send to eisc
                     //uint channelNumber = (uint)item.number; this is not necessary when we sort EPG by channel ID
-                    epgEisc.SetSerial(i, item.programs[0].name);
+                    epgEisc.SetSerial(i, item.programs[0].name == "N/A" ? "" : item.programs[0].name);
                     epgEisc.SetSerial(i + 1, item.programs[0].episodeDescription);
 
                     i += 2;
@@ -425,6 +481,190 @@ namespace ThePitch_Primary
 
         }
 
+        private void PowerEvents(uint join)
+        {
+            if (join >= (uint)PowerEventJoins.AllPowerOn & join <= (uint)PowerEventJoins.PatioPowerOff)
+            {
+                switch (join)
+                {
+                    case (uint)PowerEventJoins.AllPowerOn:
+                        commMgr.RunEvent(AllPwrOnEventID);
+                        break;
+                    case (uint)PowerEventJoins.AllPowerOff:
+                        commMgr.RunEvent(AllPwrOffEventID);
+                        break;
+                    case (uint)PowerEventJoins.BarPowerOn:
+                        commMgr.RunEvent(BarPwrOnEventID);
+                        break;
+                    case (uint)PowerEventJoins.BarPowerOff:
+                        commMgr.RunEvent(BarPwrOffEventID);
+                        break;
+                    case (uint)PowerEventJoins.NorthPowerOn:
+                        commMgr.RunEvent(NorthPwrOnEventID);
+                        break;
+                    case (uint)PowerEventJoins.NorthPowerOff:
+                        commMgr.RunEvent(NorthPwrOffEventID);
+                        break;
+                    case (uint)PowerEventJoins.WestPowerOn:
+                        commMgr.RunEvent(WestPwrOnEventID);
+                        break;
+                    case (uint)PowerEventJoins.WestPowerOff:
+                        commMgr.RunEvent(WestPwrOffEventID);
+                        break;
+                    case (uint)PowerEventJoins.SouthPowerOn:
+                        commMgr.RunEvent(SouthPwrOnEventID);
+                        break;
+                    case (uint)PowerEventJoins.SouthPowerOff:
+                        commMgr.RunEvent(SouthPwrOffEventID);
+                        break;
+                    case (uint)PowerEventJoins.PrivatePowerOn:
+                        commMgr.RunEvent(PrivatePwrOnEventID);
+                        break;
+                    case (uint)PowerEventJoins.PrivatePowerOff:
+                        commMgr.RunEvent(PrivatePwrOffEventID);
+                        break;
+                    case (uint)PowerEventJoins.PatioPowerOn:
+                        commMgr.RunEvent(PatioPwrOnEventID);
+                        break;
+                    case (uint)PowerEventJoins.PatioPowerOff:
+                        commMgr.RunEvent(PatioPwrOffEventID);
+                        break;
+                }
+            }
+        
+        }
+
+
+        //DEPRECATED METHODS
+        private string BuildTVControlRequestBody(uint powerJoin)
+        {
+            string requestBody = "";
+            string actionVar;
+            uint endpointIndex = 0;
+
+            //test if the incoming channel selection falls within the amount of channel on offer currently
+            if (powerJoin >= (uint)PowerJoinsPerDisplay.Bar1PowerOn & powerJoin <= (uint)PowerJoinsPerDisplay.Patio3PowerOff)
+            {
+                //create actionparams for request body json 
+                List<ActionParameter> actionparams = new List<ActionParameter>();
+
+
+                //set a local var for TVOn or TVOff
+                if (powerJoin % 2 == 0) //if the powerJoin is even, then we know its a "TVOn" request
+                {
+                    actionVar = "TVOn";
+                }
+                else
+                {
+                    actionVar = "TVOff";
+                }
+
+                //gather the endpoint ID here with a switch statement
+                switch (powerJoin)
+                {
+                    case (uint)PowerJoinsPerDisplay.Bar1PowerOn | (uint)PowerJoinsPerDisplay.Bar1PowerOff:
+                        endpointIndex = 0;
+                        break;
+
+                    case (uint)PowerJoinsPerDisplay.Bar2PowerOn | (uint)PowerJoinsPerDisplay.Bar2PowerOff:
+                        endpointIndex = 1;
+                        break;
+
+                    case (uint)PowerJoinsPerDisplay.Bar3PowerOn | (uint)PowerJoinsPerDisplay.Bar3PowerOff:
+                        endpointIndex = 2;
+                        break;
+
+                    case (uint)PowerJoinsPerDisplay.Bar4PowerOn | (uint)PowerJoinsPerDisplay.Bar4PowerOff:
+                        endpointIndex = 3;
+                        break;
+
+                    case (uint)PowerJoinsPerDisplay.NorthLounge1PowerOn | (uint)PowerJoinsPerDisplay.NorthLounge1PowerOff:
+                        endpointIndex = 4;
+                        break;
+
+                    case (uint)PowerJoinsPerDisplay.NorthLounge2PowerOn | (uint)PowerJoinsPerDisplay.NorthLounge2PowerOff:
+                        endpointIndex = 5;
+                        break;
+
+                    case (uint)PowerJoinsPerDisplay.NorthLounge3PowerOn | (uint)PowerJoinsPerDisplay.NorthLounge3PowerOff:
+                        endpointIndex = 6;
+                        break;
+
+                    case (uint)PowerJoinsPerDisplay.WestLounge1PowerOn | (uint)PowerJoinsPerDisplay.WestLounge1PowerOff:
+                        endpointIndex = 7;
+                        break;
+
+                    case (uint)PowerJoinsPerDisplay.WestLounge2PowerOn | (uint)PowerJoinsPerDisplay.WestLounge2PowerOff:
+                        endpointIndex = 8;
+                        break;
+
+                    case (uint)PowerJoinsPerDisplay.SouthLounge1PowerOn | (uint)PowerJoinsPerDisplay.SouthLounge1PowerOff:
+                        endpointIndex = 9;
+                        break;
+
+                    case (uint)PowerJoinsPerDisplay.SouthLounge2PowerOn | (uint)PowerJoinsPerDisplay.SouthLounge2PowerOff:
+                        endpointIndex = 10;
+                        break;
+
+                    case (uint)PowerJoinsPerDisplay.SouthLounge3PowerOn | (uint)PowerJoinsPerDisplay.SouthLounge3PowerOff:
+                        endpointIndex = 11;
+                        break;
+
+                    case (uint)PowerJoinsPerDisplay.SouthLounge4PowerOn | (uint)PowerJoinsPerDisplay.SouthLounge3PowerOff:
+                        endpointIndex = 12;
+                        break;
+
+                    case (uint)PowerJoinsPerDisplay.PrivatePowerOn | (uint)PowerJoinsPerDisplay.PrivatePowerOff:
+                        endpointIndex = 13;
+                        break;
+
+                    case (uint)PowerJoinsPerDisplay.Patio1PowerOn | (uint)PowerJoinsPerDisplay.Patio1PowerOff:
+                        endpointIndex = 14;
+                        break;
+
+                    case (uint)PowerJoinsPerDisplay.Patio2PowerOn | (uint)PowerJoinsPerDisplay.Patio2PowerOff:
+                        endpointIndex = 15;
+                        break;
+
+                    case (uint)PowerJoinsPerDisplay.Patio3PowerOn | (uint)PowerJoinsPerDisplay.Patio3PowerOff:
+                        endpointIndex = 16;
+                        break;
+                }
+
+
+                //more params for request body
+                List<ActionTarget> targetList = new List<ActionTarget>
+                {
+                    new ActionTarget { id =commMgr.EndpointList.items[(int)endpointIndex].id, cmdTargetType = "Endpoint" }
+                };
+
+                //request body proper (JSON) by creating a JSON object to serialze and attach to the request (body)
+                TVPowerActionObject tvPowerActionRequestBody = new TVPowerActionObject
+                {
+                    action = actionVar,
+                    actionCluster = "DSS",
+                    actionParameters = actionparams,
+                    actionTargets = targetList,
+
+                };
+
+                //serialize request body JSON into string
+                requestBody = JsonConvert.SerializeObject(tvPowerActionRequestBody);
+
+
+                if (Debug.ZBandDebugEnabled)
+                    ErrorLog.Notice($"TV Power Request Body: {requestBody}");
+            }
+            else
+            {
+                if (Debug.ZBandDebugEnabled) ErrorLog.Warn($"TV Power request not within join range.");
+            }
+
+            //Make request
+            return requestBody;
+
+        }
+
         private string BuildSetChannelByGroupBody(ushort endpointRouteValue, string GroupID)
         {
             string requestBody = "";
@@ -480,123 +720,6 @@ namespace ThePitch_Primary
             return requestBody;
         }
 
-        private string BuildTVControlRequestBody(uint powerJoin)
-        {
-            string requestBody = "";
-            string actionVar;
-            uint endpointIndex = 0;
-
-            //test if the incoming channel selection falls within the amount of channel on offer currently
-            if (powerJoin >= (uint)PowerJoins.Bar1PowerOn & powerJoin <= (uint)PowerJoins.PrivatePowerOff)
-            {
-                //create actionparams for request body json 
-                List<ActionParameter> actionparams = new List<ActionParameter>();
-
-
-                //set a local var for TVOn or TVOff
-                if (powerJoin % 2 == 0) //if the powerJoin is even, then we know its a "TVOn" request
-                {
-                    actionVar = "TVOn";
-                }
-                else
-                {
-                    actionVar = "TVOff";
-                }
-
-                //gather the endpoint ID here with a switch statement
-                switch (powerJoin)
-                {
-                    case (uint)PowerJoins.Bar1PowerOn | (uint)PowerJoins.Bar1PowerOff:
-                        endpointIndex = 0;
-                        break;
-
-                    case (uint)PowerJoins.Bar2PowerOn | (uint)PowerJoins.Bar2PowerOff:
-                        endpointIndex = 1;
-                        break;
-
-                    case (uint)PowerJoins.Bar3PowerOn | (uint)PowerJoins.Bar3PowerOff:
-                        endpointIndex = 2;
-                        break;
-
-                    case (uint)PowerJoins.Bar4PowerOn | (uint)PowerJoins.Bar4PowerOff:
-                        endpointIndex = 3;
-                        break;
-
-                    case (uint)PowerJoins.NorthLounge1PowerOn | (uint)PowerJoins.NorthLounge1PowerOff:
-                        endpointIndex = 4;
-                        break;
-
-                    case (uint)PowerJoins.NorthLounge2PowerOn | (uint)PowerJoins.NorthLounge2PowerOff:
-                        endpointIndex = 5;
-                        break;
-
-                    case (uint)PowerJoins.NorthLounge3PowerOn | (uint)PowerJoins.NorthLounge3PowerOff:
-                        endpointIndex = 6;
-                        break;
-
-                    case (uint)PowerJoins.WestLounge1PowerOn | (uint)PowerJoins.WestLounge1PowerOff:
-                        endpointIndex = 7;
-                        break;
-
-                    case (uint)PowerJoins.WestLounge2PowerOn | (uint)PowerJoins.WestLounge2PowerOff:
-                        endpointIndex = 8;
-                        break;
-
-                    case (uint)PowerJoins.SouthLounge1PowerOn | (uint)PowerJoins.SouthLounge1PowerOff:
-                        endpointIndex = 9;
-                        break;
-
-                    case (uint)PowerJoins.SouthLounge2PowerOn | (uint)PowerJoins.SouthLounge2PowerOff:
-                        endpointIndex = 10;
-                        break;
-
-                    case (uint)PowerJoins.SouthLounge3PowerOn | (uint)PowerJoins.SouthLounge3PowerOff:
-                        endpointIndex = 11;
-                        break;
-
-                    case (uint)PowerJoins.SouthLounge4PowerOn | (uint)PowerJoins.SouthLounge3PowerOff:
-                        endpointIndex = 12;
-                        break;
-
-                    case (uint)PowerJoins.PrivatePowerOn | (uint)PowerJoins.PrivatePowerOff:
-                        endpointIndex = 13;
-                        break;
-                }
-
-
-                //more params for request body
-                List<ActionTarget> targetList = new List<ActionTarget>
-                {
-                    new ActionTarget { id =commMgr.EndpointList.items[(int)endpointIndex].id, cmdTargetType = "Endpoint" }
-                };
-
-                //request body proper (JSON) by creating a JSON object to serialze and attach to the request (body)
-                TVPowerActionObject tvPowerActionRequestBody = new TVPowerActionObject
-                {
-                    action = actionVar,
-                    actionCluster = "DSS",
-                    actionParameters = actionparams,
-                    actionTargets = targetList,
-
-                };
-
-                //serialize request body JSON into string
-                requestBody = JsonConvert.SerializeObject(tvPowerActionRequestBody);
-
-
-                if (Debug.ZBandDebugEnabled)
-                    ErrorLog.Notice($"TV Power Request Body: {requestBody}");
-            }
-            else
-            {
-                if (Debug.ZBandDebugEnabled) ErrorLog.Warn($"Channel index requested is not within the enabled channel list.");
-            }
-
-            //Make request
-            return requestBody;
-
-        }
-
 
         //********************************      EISC Event Handlers     ******************************//
         private void Eisc_event(object sender, EiscEventArgs e)
@@ -642,8 +765,9 @@ namespace ThePitch_Primary
                             default: //send power joins to function
                                 if (e.Args.Sig.BoolValue)
                                 {
-                                    string requestBody = BuildTVControlRequestBody(e.Args.Sig.Number);
-                                    commMgr.SetPower(requestBody);
+                                    PowerEvents(e.Args.Sig.Number); //send join to method to parse and call appropriate api requests
+                                    //string requestBody = BuildTVControlRequestBody(e.Args.Sig.Number);
+                                    //commMgr.SetPower(requestBody);
                                 }
                                 break;
                         }
@@ -681,8 +805,6 @@ namespace ThePitch_Primary
                         if (Debug.SystemDebugEnabled) 
                             CrestronConsole.PrintLine($"EISC Analog {e.Args.Sig.Number} changed to {e.Args.Sig.UShortValue}");
 
-                        
-
                         //check that simpl windows program is ready to start sending valid info, after that start processing anything that comes from it.
                         if (_systemReadyForRouting)
                         {
@@ -698,6 +820,7 @@ namespace ThePitch_Primary
                             {
                                 //Make request
                                 commMgr.SetChannel(requestBody);
+                                //commMgr.RunImmediateEvent(requestBody);
 
                                 //send the currently selected channel number to the feedback side of the EISC for Fb per endpoint
                                 //setting this in this way presumes the setchannel action is successful

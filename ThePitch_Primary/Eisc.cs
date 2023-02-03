@@ -65,9 +65,6 @@ namespace TSI.HelperClasses
             }
         }
 
-
-
-
         public void SetDigital(uint Join, bool value)
         {
             _eisc.BooleanInput[Join].BoolValue = value;
