@@ -170,7 +170,6 @@ namespace ThePitch_Primary
                     {
                         ErrorLog.Notice("Creating program thread");
 
-                        
                         //set important vars for commMgr
                         commMgr.UserName = ZBand_Username;
                         commMgr.Password = ZBand_Password;
@@ -178,43 +177,9 @@ namespace ThePitch_Primary
 
                         //subscribe to LoginEvents
                         commMgr.LoginEvent += CommMgr_LoginEvent;
-
-                        
+ 
                         //initialize commMgr
                         commMgr.InitializeCommsManager();
-                        
-                        
-                        //create console commands for testing
-                        CrestronConsole.AddNewConsoleCommand(
-                            GetEndpoints,
-                            "GetEndpoints",
-                            "Requests List of Endpoints from Zband Server",
-                            ConsoleAccessLevelEnum.AccessOperator);
-
-                        CrestronConsole.AddNewConsoleCommand(
-                            GetChannels,
-                            "GetChannels",
-                            "Requests List of Enabled Channels from Zband Server",
-                            ConsoleAccessLevelEnum.AccessOperator);
-
-                        CrestronConsole.AddNewConsoleCommand(
-                            GetEPG,
-                            "GetEPG",
-                            "Requests List of Current Shows for Enabled Channels from Zband Server",
-                            ConsoleAccessLevelEnum.AccessOperator);
-
-                        CrestronConsole.AddNewConsoleCommand(
-                            SetSystemDebugging,
-                            "SetSystemDebugging",
-                            "Sets System Debug variable to on/off so System Debug messages are active.",
-                            ConsoleAccessLevelEnum.AccessOperator);
-
-                        CrestronConsole.AddNewConsoleCommand(
-                            SetZBandDebugging,
-                            "SetZBandDebugging",
-                            "Sets ZBand Debug variable to on/off so System Debug messages are active.",
-                            ConsoleAccessLevelEnum.AccessOperator);
-                        
                     });
 
                 programThread.Start();
@@ -305,7 +270,7 @@ namespace ThePitch_Primary
                 }
 
                 endpointEisc.SetSerial(i, item.name);
-                endpointEisc.SetSerial(i + endpointNowPlayingNameJoinOffset, item.playingChannel1Name);
+                endpointEisc.SetSerial(i + endpointNowPlayingNameJoinOffset, item.playingChannel1Name == "N/A" ? "" : item.playingChannel1Name);
                 endpointEisc.SetSerial(i + endpointNowPlayingNumberJoinOffset, item.playingChannel1Number);
 
                 i++;
@@ -405,7 +370,7 @@ namespace ThePitch_Primary
                         //if the chanIndex is not -1, its been found in the list, set serial to that program's name to keep track of current program on each endpoint
                         if (chanIndex != -1)
                         {   //send to EISC
-                            endpointEisc.SetSerial(i + endpointNowPlayingProgramName + 1, commMgr.EPGLineUp.items[chanIndex].programs[0].name); //use '0' index because we only want whats playing at this second
+                            endpointEisc.SetSerial(i + endpointNowPlayingProgramName + 1, commMgr.EPGLineUp.items[chanIndex].programs[0].name == "N/A" ? "" : commMgr.EPGLineUp.items[chanIndex].programs[0].name); //use '0' index because we only want whats playing at this second
                         }
                     }
                 }
@@ -481,7 +446,7 @@ namespace ThePitch_Primary
 
         }
 
-        private void PowerEvents(uint join)
+        private void FirePowerEventRequests(uint join)
         {
             if (join >= (uint)PowerEventJoins.AllPowerOn & join <= (uint)PowerEventJoins.PatioPowerOff)
             {
@@ -724,7 +689,7 @@ namespace ThePitch_Primary
         //********************************      EISC Event Handlers     ******************************//
         private void Eisc_event(object sender, EiscEventArgs e)
         {
-            if (Debug.SystemDebugEnabled) ErrorLog.Notice($"Eisc Event Fired {e.Message}");
+            if (Debug.SystemDebugEnabled) ErrorLog.Notice($"Eisc Event Fired. Signal: {e.Args.Sig} from IP-ID: {e.ID}");
 
             //set var _systemReadyForRouting = to the AND of all eisc online signals
             _systemReadyForRouting = endpointEisc.Online & channelEisc.Online & digitalEisc.Online & epgEisc.Online;
@@ -765,7 +730,7 @@ namespace ThePitch_Primary
                             default: //send power joins to function
                                 if (e.Args.Sig.BoolValue)
                                 {
-                                    PowerEvents(e.Args.Sig.Number); //send join to method to parse and call appropriate api requests
+                                    FirePowerEventRequests(e.Args.Sig.Number); //send join to method to parse and call appropriate api requests
                                     //string requestBody = BuildTVControlRequestBody(e.Args.Sig.Number);
                                     //commMgr.SetPower(requestBody);
                                 }

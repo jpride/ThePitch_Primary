@@ -79,7 +79,7 @@ namespace ZBand_EZTV
             }
             catch (Exception ex)
             {
-                ErrorLog.Error($"Error in InitializeCommsManager: LoginRequest()");
+                ErrorLog.Error($"Error in InitializeCommsManager: LoginRequest() failed");
             }
         }
 
@@ -137,7 +137,7 @@ namespace ZBand_EZTV
             }
             catch (WebException we) when (we.Status == WebExceptionStatus.Timeout)
             {
-                ErrorLog.Error($"WebException in LoginRequest. The process timed out");
+                ErrorLog.Error($"WebException in LoginRequest. The operation timed out");
             }
             catch (Exception e)
             {
@@ -446,9 +446,9 @@ namespace ZBand_EZTV
         {
             //check token and take appropriate action
             PreAuthorize();
-
+            
             //get current DateTime and 15 min from now as well
-            DateTime now = DateTime.Now;
+            DateTime now = DateTime.UtcNow; //this api requires time in UTC for some reason
             string nowString = now.ToString("yyyy-MM-ddTHH:mm:ss");
 
             DateTime fifteenMinFromNow = now.AddMinutes(15);
@@ -464,7 +464,7 @@ namespace ZBand_EZTV
             //create an api path with the time frame included
             string apiPath = "epg?" + offset + "&" + limit + "&from=" + nowString + "&to=" + fifteenMinFromNowString + "&" + targetuseragent + "&" + sort + "&" + filter;
 
-
+            
             try
             {
                 //create request 
